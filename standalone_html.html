@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🏒 Tournament Draft</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #f5f5f5; }
+  input, select, button { font-family: inherit; }
+  input[type=number]::-webkit-inner-spin-button { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+const initialGoalies = [
+  { name:"Ed Mort",       score:16, age:2026-1971, weight:160 },
+  { name:"John Breen",    score:14, age:2026-1961, weight:240 },
+  { name:"Joel Kooistra", score:12, age:2026-1982, weight:215 },
+  { name:"Ryan Cameron",  score:12, age:2026-1982, weight:216 },
+  { name:"AJ Hay",        score:12, age:2026-2001, weight:150 },
+  { name:"Allan Manz",    score:10, age:2026-1964, weight:220 },
+  { name:"Michael Guzik", score:10, age:2026-1967, weight:180 },
+  { name:"Vaughn Thomas", score:10, age:2026-2005, weight:130 },
+];
+
+const raw = [
+  ["Murray Desrosiers","D",null,1969,185],["Clayton Gauthier","F",null,1971,250],
+  ["Walden Chow","F",null,1970,160],["Derek Munn","F",null,1975,165],
+  ["Kurt Lock","F",5,1973,190],["Rick Ingalls","F",null,1961,185],
+  ["Dustin Sengaus","F",5,1979,225],["Brent Duncanson","F",6,1966,190],
+  ["Doug Scott","F",1,1975,190],["William Fluet","F",8,1966,205],
+  ["David Kisilevsky","F",4,1972,170],["Jamie Burley","F",6,1983,165],
+  ["Steve Glowa","F",7,1973,155],["Trevor Korol","F",null,1990,180],
+  ["Dustin Boone","F",10,1994,180],["Ryan Hilderman","F",null,1977,180],
+  ["Bob Baxter","F",null,1953,160],["Chris Dumanowski","F",5,1967,240],
+  ["Steven Hoffort","F",5,1969,185],["Dale Robinson","F",6,1963,175],
+  ["Connor O'Leary","F",10,1990,190],["Sean McCully","D",7,1972,215],
+  ["Wade Weaver","D",8,1986,240],["John Nunziata","F",5,1965,210],
+  ["Brett Burgess","F",6,1977,175],["Simon McLeod","F",10,1999,185],
+  ["Lucas McLeod","F",10,1996,220],["Craig Quipp","D",9,1973,175],
+  ["Sylvain Drolet","D",7,1970,185],["Denis St-Pierre","F",6,1965,182],
+  ["Jackson Perry","F",9,1978,175],["Neil O'Connor","F",5,1961,190],
+  ["Charlie Crutchfield","D",null,1952,175],["Brad Milne","D",null,1985,230],
+  ["Garnet Amundson","D",5,1961,180],["Arnie Brownlees","D",1,1963,200],
+  ["Greg Beauchamp","F",null,1962,195],["Carter Siebens","D",6,1963,195],
+  ["Randal Davidson","D",6,1969,160],["Dennis Regan","F",2,1967,225],
+  ["Nicolas Regan","F",11,2001,180],["Stephen Larsen","D",5,1966,190],
+  ["John Boone","F",3,1960,170],["Chris Coltman","F",6,1970,180],
+  ["Chris Trudel","F",5,1974,210],["Ryan Baht","F",8,1981,205],
+  ["Chris Wyman","F",null,1970,215],["Logan Zahn","D",8,1996,155],
+  ["Nolan Olexyn","D",9,1995,220],["Trevor McNally","F",8,1996,165],
+  ["Blake Hryciw","F",3,1985,180],["Mark McCalder","F",1,1956,170],
+  ["Ryan Pinkney","F",7,1983,180],["Chris Winkler","D",5,1964,260],
+  ["Adam Anderson","F",10,1986,200],["Blair Kattler","F",8,1990,160],
+  ["Jake Mcleod","D",7,1992,210],["Dwayne Koch","D",7,1970,230],
+  ["Bryan Boechler","D",7,1972,200],["Darren Pearson","D",3,1955,175],
+  ["Greg Korsrud","F",5,1970,210],["Stovel Ferguson","D",1,1971,190],
+  ["David Macgillivray","F",3,1973,225],["Ben Rye","F",5,1987,200],
+  ["Joe McCormick","F",6,1985,280],["Justin Kurtenbach","F",6,1981,180],
+  ["Paul Chartrand","D",6,1974,205],["Jens Stemo","F",9,1975,280],
+  ["Carson Nelson","F",6,1987,240],["Lorne Kattler","D",4,1961,185],
+  ["Jeff Purdy","F",7,1980,175],["Ryan Domes","D",7,1980,190],
+  ["Jeremy Gukert","F",8,1978,185],["Stu Campbell","D",5,1957,185],
+  ["Mike McLeod","D",5,1960,165],["Lorne Anderson","D",4,1959,220],
+  ["Andrew Arthur","F",2,1962,275],["Don Burkinshaw","F",4,1955,230],
+  ["Dean Koch","D",5,1963,205],["Kent Greff","D",9,1976,170],
+  ["Paul Ketchabaw","F",6,1961,165],["Shawn Laursen","F",7,1967,180],
+  ["Steve Paul","D",5,1957,200],["Scott Dowler","D",8,1972,185],
+  ["Phil Prefontaine","D",3,1961,200],["Jason Guenther","F",4,1970,185],
+  ["Gordon Watson","F",1,1993,190],["Ron Watson","F",5,1957,200],
+  ["Andy Prefontaine","F",8,1978,240],["Joseph Troiano","F",4,1960,195],
+  ["Neill McQuade","F",4,1987,190],["Matt Sakowsky","F",2,1968,160],
+  ["Kevin Oszust","F",4,1970,175],["Jordan Wilson","D",8,1985,210],
+  ["Curtis Morgan","D",8,1977,200],["John Robertson","F",3,1970,215],
+  ["Olivier Garsault","D",2,1963,220],["Nolan Szabinio","D",5,1980,180],
+  ["Bob Lee","D",6,1961,185],["Terry Olexyn","D",5,1964,235],
+  ["Darren Dillenbeck","D",7,1973,190],["Jon Schnell","D",3,1961,200],
+  ["Robbie Stevenson","D",7,1984,225],["Brent Avender","F",6,1966,200],
+  ["Paul Rubner","F",1,1962,200],["James Skawski","D",3,1963,240],
+  ["Kyle Kilback","F",7,1976,240],["Brendan Koch","F",9,1992,205],
+];
+
+const captainNames = ["Dean Koch","Mike McLeod","Jake Mcleod","Bob Lee","Bryan Boechler","Andy Prefontaine","Chris Coltman","Jeremy Gukert"];
+const familyGroups = [
+  { label:"Father & Son", color:"#e74c3c", members:["Dennis Regan","Nicolas Regan"] },
+  { label:"Family",       color:"#9b59b6", members:["Mike McLeod","Simon McLeod","Lucas McLeod","Jake Mcleod"] },
+  { label:"Father & Son", color:"#e67e22", members:["Lorne Kattler","Blair Kattler"] },
+  { label:"Father & Son", color:"#27ae60", members:["Lorne Anderson","Adam Anderson"] },
+  { label:"Cousins/Brothers", color:"#2980b9", members:["Phil Prefontaine","Andy Prefontaine"] },
+  { label:"Father & Son", color:"#f39c12", members:["Dean Koch","Brendan Koch"] },
+  { label:"Father & Son", color:"#16a085", members:["John Boone","Dustin Boone"] },
+];
+
+function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+
+function buildTeams(scoreMap, posMap, goalieScoreMap) {
+  const players = raw.map(([name, pos, origScore, by, wt]) => ({
+    name, pos: posMap[name] ?? pos,
+    score: scoreMap[name] ?? (origScore ?? 5),
+    age: 2026 - by, weight: wt,
+    unrated: origScore === null && scoreMap[name] === undefined,
+    captain: captainNames.some(c => c.toLowerCase() === name.toLowerCase()),
+  }));
+  const goalies = initialGoalies.map(g => ({ ...g, score: goalieScoreMap[g.name] ?? g.score }));
+  const forwards = players.filter(p => p.pos==="F"), defense = players.filter(p => p.pos==="D");
+  const captainF = forwards.filter(p=>p.captain), captainD = defense.filter(p=>p.captain);
+  const nonCapF = forwards.filter(p=>!p.captain), nonCapD = defense.filter(p=>!p.captain);
+  function snakeDraft(list, n) {
+    const t = Array.from({length:n},()=>[]);
+    list.forEach((p,i)=>{ const r=Math.floor(i/n),pos=i%n; t[r%2===0?pos:n-1-pos].push(p); });
+    return t;
+  }
+  const allCaps = [...captainF,...captainD].sort((a,b)=>b.score-a.score);
+  const fBase = Array.from({length:8},()=>[]), dBase = Array.from({length:8},()=>[]);
+  allCaps.forEach((c,i)=>{ if(c.pos==="F") fBase[i].push(c); else dBase[i].push(c); });
+  const draftF = snakeDraft([...nonCapF].sort((a,b)=>b.score-a.score),8);
+  const draftD = snakeDraft([...nonCapD].sort((a,b)=>b.score-a.score),8);
+  const fTeams = fBase.map((b,i)=>[...b,...draftF[i]]);
+  const dTeams = dBase.map((b,i)=>[...b,...draftD[i]]);
+  for(let i=0;i<8;i++){
+    while(dTeams[i].length<5){
+      let donorIdx=-1,maxD=5;
+      for(let j=0;j<8;j++){if(j!==i&&dTeams[j].length>maxD){maxD=dTeams[j].length;donorIdx=j;}}
+      if(donorIdx===-1) break;
+      const needAvg=dTeams[i].length?avg(dTeams[i].map(p=>p.score)):5;
+      const cands=dTeams[donorIdx].filter(p=>!p.captain).sort((a,b)=>Math.abs(a.score-needAvg)-Math.abs(b.score-needAvg));
+      if(!cands.length) break;
+      const mover=cands[0];
+      dTeams[donorIdx]=dTeams[donorIdx].filter(p=>p!==mover); dTeams[i].push(mover);
+      const fCands=fTeams[i].filter(p=>!p.captain).sort((a,b)=>Math.abs(a.score-avg(fTeams[donorIdx].map(p=>p.score)))-Math.abs(b.score-avg(fTeams[donorIdx].map(p=>p.score))));
+      if(fCands.length){const fm=fCands[0];fTeams[i]=fTeams[i].filter(p=>p!==fm);fTeams[donorIdx].push(fm);}
+    }
+  }
+  const skaterRank=fTeams.map((f,i)=>({idx:i,avg:avg([...f,...dTeams[i]].map(p=>p.score))})).sort((a,b)=>a.avg-b.avg);
+  const sortedG=[...goalies].sort((a,b)=>b.score-a.score);
+  const goalieMap={};
+  skaterRank.forEach((t,i)=>{goalieMap[t.idx]={...sortedG[i],pos:"G"};});
+  let ts=fTeams.map((f,i)=>({id:i+1,players:[...f,...dTeams[i],goalieMap[i]]}));
+  function spreadOf(v){return Math.max(...v)-Math.min(...v);}
+  for(let iter=0;iter<1000;iter++){
+    const ages=ts.map(t=>avg(t.players.map(p=>p.age)));
+    const scores=ts.map(t=>avg(t.players.map(p=>p.score)));
+    const weights=ts.map(t=>avg(t.players.map(p=>p.weight)));
+    const aS=spreadOf(ages),sS=spreadOf(scores),wS=spreadOf(weights);
+    if(aS<2&&sS<0.4&&wS<8) break;
+    const pairs=[];
+    if(aS>=2) pairs.push([ages.indexOf(Math.max(...ages)),ages.indexOf(Math.min(...ages))]);
+    if(sS>=0.4) pairs.push([scores.indexOf(Math.max(...scores)),scores.indexOf(Math.min(...scores))]);
+    if(wS>=8) pairs.push([weights.indexOf(Math.max(...weights)),weights.indexOf(Math.min(...weights))]);
+    let best=null,bestG=0;
+    for(const [iA,iB] of pairs){
+      ts[iA].players.forEach((pa,oi)=>{
+        if(pa.pos==="G"||pa.captain) return;
+        ts[iB].players.forEach((pb,yi)=>{
+          if(pb.pos!==pa.pos||pb.captain) return;
+          const nA=ts[iA].players.length,nB=ts[iB].players.length;
+          const nA2=[...ages],nS2=[...scores],nW2=[...weights];
+          nA2[iA]=(ages[iA]*nA-pa.age+pb.age)/nA; nA2[iB]=(ages[iB]*nB-pb.age+pa.age)/nB;
+          nS2[iA]=(scores[iA]*nA-pa.score+pb.score)/nA; nS2[iB]=(scores[iB]*nB-pb.score+pa.score)/nB;
+          nW2[iA]=(weights[iA]*nA-pa.weight+pb.weight)/nA; nW2[iB]=(weights[iB]*nB-pb.weight+pa.weight)/nB;
+          const g=(aS-spreadOf(nA2))+(sS-spreadOf(nS2))*5+(wS-spreadOf(nW2))*0.1;
+          if(g>bestG){bestG=g;best={iA,iB,oi,yi};}
+        });
+      });
+    }
+    if(!best||bestG<=0) break;
+    const tmp=ts[best.iA].players[best.oi];
+    ts[best.iA].players[best.oi]=ts[best.iB].players[best.yi];
+    ts[best.iB].players[best.yi]=tmp;
+  }
+  return ts;
+}
+
+function teamStats(team) {
+  const ps=team.players,fP=ps.filter(p=>p.pos==="F"),dP=ps.filter(p=>p.pos==="D");
+  return { fwd:fP.length,def:dP.length,goal:ps.filter(p=>p.pos==="G").length,
+    avgScore:avg(ps.map(p=>p.score)),avgFwdScore:avg(fP.map(p=>p.score)),
+    avgDefScore:avg(dP.map(p=>p.score)),avgAge:avg(ps.map(p=>p.age)),
+    avgWeight:avg(ps.map(p=>p.weight)),total:ps.length };
+}
+
+const teamColors=["#e74c3c","#e67e22","#f1c40f","#2ecc71","#1abc9c","#3498db","#9b59b6","#e91e63"];
+const teamNames=["Team 1","Team 2","Team 3","Team 4","Team 5","Team 6","Team 7","Team 8"];
+
+function App() {
+  const [scoreMap,setScoreMap]=useState({});
+  const [posMap,setPosMap]=useState({});
+  const [goalieScoreMap,setGoalieScoreMap]=useState({});
+  const [view,setView]=useState("roster");
+  const [selected,setSelected]=useState(0);
+  const [lookupQuery,setLookupQuery]=useState("");
+  const [lookupResult,setLookupResult]=useState(null);
+  const [lookupDone,setLookupDone]=useState(false);
+  const [editing,setEditing]=useState(null);
+  const [editVal,setEditVal]=useState("");
+
+  const teams=buildTeams(scoreMap,posMap,goalieScoreMap);
+  const allStats=teams.map(teamStats);
+  const team=teams[selected];
+  const stats=teamStats(team);
+  const fwds=team.players.filter(p=>p.pos==="F").sort((a,b)=>b.score-a.score);
+  const defs=team.players.filter(p=>p.pos==="D").sort((a,b)=>b.score-a.score);
+
+  function startEdit(name,field,current){setEditing({name,field});setEditVal(String(current));}
+  function commitEdit(){
+    if(!editing) return;
+    const {name,field}=editing;
+    if(field==="score"){const v=parseFloat(editVal);if(!isNaN(v)&&v>=1&&v<=11)setScoreMap(p=>({...p,[name]:v}));}
+    else if(field==="pos"){if(["F","D"].includes(editVal))setPosMap(p=>({...p,[name]:editVal}));}
+    else if(field==="goalieScore"){const v=parseFloat(editVal);if(!isNaN(v)&&v>=1&&v<=20)setGoalieScoreMap(p=>({...p,[name]:v}));}
+    setEditing(null);
+  }
+  function btnStyle(bg){return {padding:"2px 6px",borderRadius:4,border:"none",background:bg,color:"#fff",cursor:"pointer",fontSize:11};}
+
+  function PlayerRow({p,i}){
+    const isEditingScore=editing?.name===p.name&&editing?.field==="score";
+    const isEditingPos=editing?.name===p.name&&editing?.field==="pos";
+    return (
+      <div style={{display:"flex",justifyContent:"space-between",padding:"6px 8px",borderRadius:4,
+        background:p.unrated?"#fff8e1":i%2===0?"#fff":"#f8f9fa",
+        border:p.unrated?"1px solid #f9a825":"none",fontSize:13,marginBottom:2,alignItems:"center"}}>
+        <span style={{fontWeight:500,display:"flex",alignItems:"center",gap:4}}>
+          {p.captain?"© ":""}{p.name}{p.unrated?<span style={{color:"#f9a825",fontWeight:700}}> ⚠️</span>:""}
+          {isEditingPos?(
+            <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+              <select value={editVal} onChange={e=>setEditVal(e.target.value)} autoFocus
+                style={{padding:"2px 4px",borderRadius:4,border:"1px solid #3498db",fontSize:12}}>
+                <option value="F">Forward</option><option value="D">Defence</option>
+              </select>
+              <button onClick={commitEdit} style={btnStyle("#3498db")}>✓</button>
+              <button onClick={()=>setEditing(null)} style={btnStyle("#aaa")}>✕</button>
+            </span>
+          ):(
+            <button onClick={()=>startEdit(p.name,"pos",p.pos)}
+              style={{padding:"1px 5px",borderRadius:3,border:"1px solid #ddd",background:"#f8f8f8",color:"#888",cursor:"pointer",fontSize:10}}>✏️</button>
+          )}
+        </span>
+        <span style={{color:"#888",fontSize:12,display:"flex",alignItems:"center",gap:4}}>
+          {isEditingScore?(
+            <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+              <input type="number" min={1} max={11} step={1} value={editVal}
+                onChange={e=>setEditVal(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter")commitEdit();if(e.key==="Escape")setEditing(null);}}
+                autoFocus style={{width:48,padding:"2px 4px",borderRadius:4,border:"1px solid #3498db",fontSize:12,textAlign:"center"}}/>
+              <button onClick={commitEdit} style={btnStyle("#3498db")}>✓</button>
+              <button onClick={()=>setEditing(null)} style={btnStyle("#aaa")}>✕</button>
+            </span>
+          ):(
+            <span style={{display:"inline-flex",alignItems:"center"}}>
+              {p.unrated?<span style={{color:"#f9a825"}}>No score</span>:p.score}
+              <button onClick={()=>startEdit(p.name,"score",p.score)}
+                style={{padding:"1px 5px",borderRadius:3,border:"1px solid #ddd",background:"#f8f8f8",color:"#888",cursor:"pointer",fontSize:10,marginLeft:3}}>✏️</button>
+            </span>
+          )}
+          <span>| {p.age}y | {p.weight}lb</span>
+        </span>
+      </div>
+    );
+  }
+
+  function GoalieRow({p}){
+    const isEditing=editing?.name===p.name&&editing?.field==="goalieScore";
+    return (
+      <div style={{display:"flex",justifyContent:"space-between",padding:"6px 8px",borderRadius:4,background:"#fff",fontSize:13,alignItems:"center"}}>
+        <span style={{fontWeight:500}}>{p.name}</span>
+        <span style={{color:"#888",fontSize:12,display:"flex",alignItems:"center",gap:4}}>
+          {isEditing?(
+            <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+              <input type="number" min={1} max={20} step={1} value={editVal}
+                onChange={e=>setEditVal(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter")commitEdit();if(e.key==="Escape")setEditing(null);}}
+                autoFocus style={{width:48,padding:"2px 4px",borderRadius:4,border:"1px solid #3498db",fontSize:12,textAlign:"center"}}/>
+              <button onClick={commitEdit} style={btnStyle("#3498db")}>✓</button>
+              <button onClick={()=>setEditing(null)} style={btnStyle("#aaa")}>✕</button>
+            </span>
+          ):(
+            <span style={{display:"inline-flex",alignItems:"center"}}>
+              {p.score}
+              <button onClick={()=>startEdit(p.name,"goalieScore",p.score)}
+                style={{padding:"1px 5px",borderRadius:3,border:"1px solid #ddd",background:"#f8f8f8",color:"#888",cursor:"pointer",fontSize:10,marginLeft:3}}>✏️</button>
+            </span>
+          )}
+          <span>| {p.age}y | {p.weight}lb</span>
+        </span>
+      </div>
+    );
+  }
+
+  function doLookup(q){
+    const query=q.trim().toLowerCase(); if(!query) return;
+    for(let i=0;i<teams.length;i++){
+      const match=teams[i].players.find(p=>p.name.toLowerCase().includes(query));
+      if(match){setLookupResult({player:match,teamIdx:i});setLookupDone(true);return;}
+    }
+    setLookupResult(null);setLookupDone(true);
+  }
+
+  function getFunFacts(t){
+    const s=teamStats(t),allS=teams.map(teamStats),facts=[];
+    if(s.avgScore===Math.max(...allS.map(x=>x.avgScore))) facts.push("🌟 Highest average skill rating of all 8 teams.");
+    if(s.avgScore===Math.min(...allS.map(x=>x.avgScore))) facts.push("🥄 Lowest average skill rating — but every underdog has its day.");
+    if(s.avgAge===Math.max(...allS.map(x=>x.avgAge))) facts.push("👴 Oldest team on the ice — experience over everything.");
+    if(s.avgAge===Math.min(...allS.map(x=>x.avgAge))) facts.push("👶 Youngest team — legs for days.");
+    if(s.avgWeight===Math.max(...allS.map(x=>x.avgWeight))) facts.push("🐘 Heaviest team — good luck getting them off the puck.");
+    if(s.avgWeight===Math.min(...allS.map(x=>x.avgWeight))) facts.push("🐦 Lightest team — built for speed.");
+    const oldest=t.players.reduce((a,b)=>a.age>b.age?a:b);
+    const youngest=t.players.filter(p=>p.pos!=="G").reduce((a,b)=>a.age<b.age?a:b);
+    facts.push(`📅 Biggest age gap: ${oldest.name} (${oldest.age}) vs ${youngest.name} (${youngest.age}) — ${oldest.age-youngest.age} years apart.`);
+    const top=t.players.filter(p=>p.pos!=="G").reduce((a,b)=>a.score>b.score?a:b);
+    facts.push(`🏒 Highest rated skater: ${top.name} (${top.score}).`);
+    const un=t.players.filter(p=>p.unrated);
+    if(un.length) facts.push(`⚠️ ${un.length} player${un.length>1?"s":""} still need${un.length===1?"s":""} a skill score.`);
+    return facts;
+  }
+
+  const allSkaters=teams.flatMap(t=>t.players.filter(p=>p.pos!=="G"));
+  const globalOldest=allSkaters.reduce((a,b)=>a.age>b.age?a:b);
+  const globalYoungest=allSkaters.reduce((a,b)=>a.age<b.age?a:b);
+
+  return (
+    <div style={{fontFamily:"system-ui,sans-serif",maxWidth:960,margin:"0 auto",padding:16}}>
+      <h2 style={{margin:"0 0 4px"}}>🏒 Tournament Draft — 8 Teams</h2>
+      <p style={{margin:"0 0 16px",color:"#888",fontSize:13}}>
+        {raw.length} skaters • {raw.filter(r=>r[1]==="F").length} forwards • {raw.filter(r=>r[1]==="D").length} defensemen • {initialGoalies.length} goalies
+      </p>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        {["roster","summary","radar","lookup"].map(v=>(
+          <button key={v} onClick={()=>setView(v)}
+            style={{padding:"6px 14px",borderRadius:6,border:"none",cursor:"pointer",
+              background:view===v?"#3498db":"#eee",color:view===v?"#fff":"#333",fontWeight:600}}>
+            {v==="roster"?"Roster View":v==="summary"?"Summary Table":v==="radar"?"Radar Charts":"Player Lookup"}
+          </button>
+        ))}
+      </div>
+
+      {view==="summary"&&(
+        <div style={{overflowX:"auto"}}>
+          <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
+            <thead><tr style={{background:"#f0f0f0"}}>
+              <th style={{padding:"8px 10px",textAlign:"left"}}>Team</th>
+              <th style={{padding:"8px 10px",textAlign:"left"}}>Captain</th>
+              <th style={{padding:"8px 10px",textAlign:"center"}}>Players</th>
+              <th style={{padding:"8px 10px",textAlign:"center"}}>Fwd</th>
+              <th style={{padding:"8px 10px",textAlign:"center"}}>Def</th>
+              <th style={{padding:"8px 10px",textAlign:"center"}}>Avg Score</th>
+              <th style={{padding:"8px 10px",textAlign:"center"}}>Avg Fwd</th>
+              <th style={{padding:"8px 10px",textAlign:"center"}}>Avg Def</th>
+              <th style={{padding:"8px 10px",textAlign:"center"}}>Goalie</th>
+              <th style={{padding:"8px 10px",textAlign:"center"}}>Avg Age</th>
+              <th style={{padding:"8px 10px",textAlign:"center"}}>Avg Weight</th>
+            </tr></thead>
+            <tbody>
+              {allStats.map((s,i)=>{
+                const ages=allStats.map(x=>x.avgAge),scores=allStats.map(x=>x.avgScore),weights=allStats.map(x=>x.avgWeight);
+                const oldest=ages.indexOf(Math.max(...ages))===i,youngest=ages.indexOf(Math.min(...ages))===i;
+                const heaviest=weights.indexOf(Math.max(...weights))===i,lightest=weights.indexOf(Math.min(...weights))===i;
+                const skilled=scores.indexOf(Math.max(...scores))===i,weakest=scores.indexOf(Math.min(...scores))===i;
+                return (
+                  <tr key={i} style={{borderBottom:"1px solid #eee",background:i%2===0?"#fff":"#fafafa",cursor:"pointer"}}
+                    onClick={()=>{setSelected(i);setView("roster");}}>
+                    <td style={{padding:"8px 10px"}}><span style={{display:"inline-block",width:12,height:12,borderRadius:"50%",background:teamColors[i],marginRight:8}}/><strong>{teamNames[i]}</strong></td>
+                    <td style={{padding:"8px 10px"}}>{teams[i].players.find(p=>p.captain)?.name??"—"}</td>
+                    <td style={{padding:"8px 10px",textAlign:"center"}}>{s.total}</td>
+                    <td style={{padding:"8px 10px",textAlign:"center"}}>{s.fwd}</td>
+                    <td style={{padding:"8px 10px",textAlign:"center"}}>{s.def}</td>
+                    <td style={{padding:"8px 10px",textAlign:"center",fontWeight:600}}>{s.avgScore.toFixed(2)} {skilled?"🌟":weakest?"🥄":""}</td>
+                    <td style={{padding:"8px 10px",textAlign:"center",color:"#e67e22"}}>{s.avgFwdScore.toFixed(2)}</td>
+                    <td style={{padding:"8px 10px",textAlign:"center",color:"#3498db"}}>{s.avgDefScore.toFixed(2)}</td>
+                    <td style={{padding:"8px 10px",textAlign:"center",color:"#8e44ad"}}>{teams[i].players.find(p=>p.pos==="G")?.score??"—"}</td>
+                    <td style={{padding:"8px 10px",textAlign:"center"}}>{s.avgAge.toFixed(1)} {oldest?"👴":youngest?"👶":""}</td>
+                    <td style={{padding:"8px 10px",textAlign:"center"}}>{s.avgWeight.toFixed(0)} lbs {heaviest?"🐘":lightest?"🐦":""}</td>
+                  </tr>
+                );
+              })}
+              <tr style={{background:"#e8f4fd",fontWeight:700,borderTop:"2px solid #3498db"}}>
+                <td style={{padding:"8px 10px"}}>Overall Avg</td><td style={{padding:"8px 10px"}}>—</td>
+                <td style={{padding:"8px 10px",textAlign:"center"}}>{(allStats.reduce((a,s)=>a+s.total,0)/8).toFixed(1)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center"}}>{(allStats.reduce((a,s)=>a+s.fwd,0)/8).toFixed(1)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center"}}>{(allStats.reduce((a,s)=>a+s.def,0)/8).toFixed(1)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center"}}>{avg(allStats.map(s=>s.avgScore)).toFixed(2)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center",color:"#e67e22"}}>{avg(allStats.map(s=>s.avgFwdScore)).toFixed(2)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center",color:"#3498db"}}>{avg(allStats.map(s=>s.avgDefScore)).toFixed(2)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center",color:"#8e44ad"}}>{avg(teams.map(t=>t.players.find(p=>p.pos==="G")?.score??0)).toFixed(1)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center"}}>{avg(allStats.map(s=>s.avgAge)).toFixed(1)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center"}}>{avg(allStats.map(s=>s.avgWeight)).toFixed(0)} lbs</td>
+              </tr>
+            </tbody>
+          </table>
+          <p style={{fontSize:12,color:"#999",marginTop:8}}>Click a row to view that team's roster.</p>
+          <div style={{marginTop:12,background:"#fdf4ff",border:"1px solid #e9d5ff",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#581c87"}}>
+            <strong>🏆 Tournament Extremes</strong><br/>
+            <span>👴 Oldest: <strong>{globalOldest.name}</strong> ({globalOldest.age})</span> &nbsp;·&nbsp;
+            <span>👶 Youngest: <strong>{globalYoungest.name}</strong> ({globalYoungest.age})</span> &nbsp;·&nbsp;
+            <span>📅 Age gap: <strong>{globalOldest.age-globalYoungest.age} years</strong></span>
+          </div>
+          <p style={{fontSize:11,color:"#bbb",marginTop:12,lineHeight:1.8}}>🌟 Most skilled · 🥄 Least skilled · 👴 Oldest · 👶 Youngest · 🐘 Heaviest · 🐦 Lightest</p>
+          <div style={{marginTop:8,background:"#fff8e1",border:"1px solid #f9a825",borderRadius:8,padding:"10px 14px",fontSize:12}}>
+            <strong style={{fontSize:13}}>⚠️ Unranked Players</strong>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>
+              {teams.flatMap((t,i)=>t.players.filter(p=>p.unrated).map(p=>({...p,teamIdx:i}))).map((p,i)=>(
+                <span key={i} style={{background:"#fff3cd",border:"1px solid #f9a825",borderRadius:4,padding:"3px 8px",color:"#856404",fontSize:12}}>
+                  {p.name} <span style={{fontWeight:400,color:"#aaa"}}>({teamNames[p.teamIdx]})</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          <div style={{marginTop:12,background:"#f9f9f9",border:"1px solid #eee",borderRadius:8,padding:"10px 14px",fontSize:12}}>
+            <strong style={{fontSize:13}}>👨‍👩‍👦 Family Groups</strong>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>
+              {familyGroups.map((g,i)=>(
+                <span key={i} style={{background:g.color+"22",border:`1px solid ${g.color}`,borderRadius:4,padding:"3px 8px",color:g.color,fontWeight:600,fontSize:12}}>
+                  {g.members.join(" & ")} <span style={{fontWeight:400,color:"#888"}}>({g.label})</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view==="radar"&&(
+        <div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16}}>
+            {teams.map((t,i)=>{
+              const s=teamStats(t),allS=teams.map(teamStats);
+              const norm=(val,arr)=>(val-Math.min(...arr))/(Math.max(...arr)-Math.min(...arr)||1);
+              const metrics=[
+                {label:"Skill",val:norm(s.avgScore,allS.map(x=>x.avgScore))},
+                {label:"Fwd",val:norm(s.avgFwdScore,allS.map(x=>x.avgFwdScore))},
+                {label:"Def",val:norm(s.avgDefScore,allS.map(x=>x.avgDefScore))},
+                {label:"Youth",val:1-norm(s.avgAge,allS.map(x=>x.avgAge))},
+                {label:"Weight",val:norm(s.avgWeight,allS.map(x=>x.avgWeight))},
+                {label:"Goalie",val:norm(t.players.find(p=>p.pos==="G")?.score??0,teams.map(t=>t.players.find(p=>p.pos==="G")?.score??0))},
+              ];
+              const cx=80,cy=80,r=55,n=metrics.length;
+              const angle=idx=>(Math.PI*2*idx/n)-Math.PI/2;
+              const pt=(idx,radius)=>[cx+radius*Math.cos(angle(idx)),cy+radius*Math.sin(angle(idx))];
+              const spiderPts=metrics.map((_,idx)=>pt(idx,metrics[idx].val*r)).map(([x,y])=>`${x},${y}`).join(" ");
+              const gridPts=f=>metrics.map((_,idx)=>pt(idx,r*f)).map(([x,y])=>`${x},${y}`).join(" ");
+              return (
+                <div key={i} style={{background:"#f8f9fa",borderRadius:8,padding:12,textAlign:"center",border:`2px solid ${teamColors[i]}`}}>
+                  <div style={{fontWeight:700,fontSize:12,color:teamColors[i],marginBottom:2}}>{teamNames[i]}</div>
+                  <div style={{fontSize:10,color:"#888",marginBottom:4}}>{t.players.find(p=>p.captain)?.name??""}</div>
+                  <svg width={160} height={160} viewBox="0 0 160 160">
+                    {[0.25,0.5,0.75,1].map(f=><polygon key={f} points={gridPts(f)} fill="none" stroke="#ddd" strokeWidth={0.5}/>)}
+                    {metrics.map((_,idx)=>{const[x,y]=pt(idx,r);return <line key={idx} x1={cx} y1={cy} x2={x} y2={y} stroke="#ddd" strokeWidth={0.5}/>;} )}
+                    <polygon points={spiderPts} fill={teamColors[i]+"44"} stroke={teamColors[i]} strokeWidth={1.5}/>
+                    {metrics.map((m,idx)=>{const[lx,ly]=pt(idx,r+14);return <text key={idx} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill="#555">{m.label}</text>;})}
+                  </svg>
+                </div>
+              );
+            })}
+          </div>
+          <p style={{fontSize:11,color:"#bbb",marginTop:12}}>Metrics normalised relative to all 8 teams. Youth = inverted age (higher = younger).</p>
+        </div>
+      )}
+
+      {view==="lookup"&&(
+        <div style={{maxWidth:480}}>
+          <div style={{display:"flex",gap:8,marginBottom:16}}>
+            <input type="text" placeholder="Enter player name..." value={lookupQuery}
+              onChange={e=>{setLookupQuery(e.target.value);setLookupDone(false);}}
+              onKeyDown={e=>e.key==="Enter"&&doLookup(lookupQuery)}
+              style={{flex:1,padding:"8px 12px",borderRadius:6,border:"1px solid #ddd",fontSize:14}}/>
+            <button onClick={()=>doLookup(lookupQuery)}
+              style={{padding:"8px 16px",borderRadius:6,border:"none",background:"#3498db",color:"#fff",cursor:"pointer",fontWeight:600,fontSize:14}}>Find</button>
+          </div>
+          {lookupDone&&lookupResult&&(
+            <div style={{background:"#f0f9ff",border:`2px solid ${teamColors[lookupResult.teamIdx]}`,borderRadius:8,padding:16}}>
+              <div style={{fontSize:22,fontWeight:700,color:teamColors[lookupResult.teamIdx],marginBottom:4}}>{teamNames[lookupResult.teamIdx]}</div>
+              <div style={{fontSize:16,fontWeight:600,marginBottom:8}}>{lookupResult.player.name}</div>
+              <div style={{display:"flex",gap:16,fontSize:13,color:"#555",flexWrap:"wrap"}}>
+                <span>Position: <strong>{lookupResult.player.pos==="G"?"Goalie":lookupResult.player.pos==="F"?"Forward":"Defence"}</strong></span>
+                <span>Score: <strong>{lookupResult.player.unrated?"Unrated":lookupResult.player.score}</strong></span>
+                <span>Age: <strong>{lookupResult.player.age}</strong></span>
+                <span>Weight: <strong>{lookupResult.player.weight} lbs</strong></span>
+                {lookupResult.player.captain&&<span style={{color:teamColors[lookupResult.teamIdx],fontWeight:700}}>© Captain</span>}
+              </div>
+              <button onClick={()=>{setSelected(lookupResult.teamIdx);setView("roster");}}
+                style={{marginTop:12,padding:"6px 14px",borderRadius:6,border:"none",cursor:"pointer",background:teamColors[lookupResult.teamIdx],color:"#fff",fontWeight:600,fontSize:13}}>
+                View Full Roster →
+              </button>
+            </div>
+          )}
+          {lookupDone&&!lookupResult&&(
+            <div style={{background:"#fff8e1",border:"1px solid #f9a825",borderRadius:8,padding:16,fontSize:14}}>
+              No player found matching "{lookupQuery}".
+            </div>
+          )}
+        </div>
+      )}
+
+      {view==="roster"&&(
+        <>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
+            {teamNames.map((name,i)=>(
+              <button key={i} onClick={()=>setSelected(i)}
+                style={{padding:"6px 12px",borderRadius:6,border:"2px solid "+teamColors[i],cursor:"pointer",
+                  background:selected===i?teamColors[i]:"#fff",color:selected===i?"#fff":teamColors[i],fontWeight:700,fontSize:13}}>
+                {name}
+              </button>
+            ))}
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:12,marginBottom:16,background:"#f8f9fa",borderRadius:8,padding:"12px 16px",borderLeft:"4px solid "+teamColors[selected]}}>
+            {[["Players",stats.total],["Forwards",stats.fwd],["Defence",stats.def],
+              ["Avg Score",stats.avgScore.toFixed(2)],["Avg Age",stats.avgAge.toFixed(1)],
+              ["Avg Weight",stats.avgWeight.toFixed(0)+" lbs"]].map(([label,val])=>(
+              <div key={label} style={{textAlign:"center",minWidth:80}}>
+                <div style={{fontSize:20,fontWeight:700,color:teamColors[selected]}}>{val}</div>
+                <div style={{fontSize:11,color:"#888"}}>{label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{background:"#f0f9ff",border:"1px solid #bde0fe",borderRadius:8,padding:"10px 14px",marginBottom:16}}>
+            <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:"#0369a1"}}>💡 Fun Facts</div>
+            {getFunFacts(team).map((f,i)=><div key={i} style={{fontSize:12,color:"#334155",marginBottom:3}}>{f}</div>)}
+          </div>
+          {team.players.filter(p=>p.unrated).length>0&&(
+            <div style={{background:"#fff8e1",border:"1px solid #f9a825",borderRadius:8,padding:"10px 14px",marginBottom:16,fontSize:13}}>
+              <strong>⚠️ Unrated Players ({team.players.filter(p=>p.unrated).length})</strong> — scores need to be assigned:&nbsp;
+              {team.players.filter(p=>p.unrated).map(p=>p.name).join(", ")}
+            </div>
+          )}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div>
+              {team.players.filter(p=>p.pos==="G").map((p,i)=>(
+                <div key={i} style={{marginBottom:16}}>
+                  <h4 style={{margin:"0 0 8px",color:"#2c3e50",borderBottom:"2px solid "+teamColors[selected],paddingBottom:4}}>🥅 Goalie</h4>
+                  <GoalieRow p={p}/>
+                </div>
+              ))}
+              <h4 style={{margin:"0 0 8px",color:"#2c3e50",borderBottom:"2px solid "+teamColors[selected],paddingBottom:4}}>⬆️ Forwards ({fwds.length})</h4>
+              {fwds.map((p,i)=><PlayerRow key={p.name} p={p} i={i}/>)}
+            </div>
+            <div>
+              <h4 style={{margin:"0 0 8px",color:"#2c3e50",borderBottom:"2px solid "+teamColors[selected],paddingBottom:4}}>🛡️ Defence ({defs.length})</h4>
+              {defs.map((p,i)=><PlayerRow key={p.name} p={p} i={i}/>)}
+            </div>
+          </div>
+          <p style={{fontSize:11,color:"#bbb",marginTop:12}}>Click ✏️ to edit a player's score or position. Changes automatically re-balance teams.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

@@ -207,12 +207,29 @@ const DEFAULT_SKATERS = [
   {name:"Kyle Kilback",origPos:"F",origScore:7,age:50,weight:240},{name:"Brendan Koch",origPos:"F",origScore:9,age:34,weight:205},
 ];
 
+const STORAGE_KEY = "hockey_draft_v1";
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) { return null; }
+}
+
+function saveState(state) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, savedAt: Date.now() }));
+  } catch(e) {}
+}
+
 function App() {
-  const [skaters, setSkaters]               = useState(DEFAULT_SKATERS);
-  const [goalies, setGoalies]               = useState(DEFAULT_GOALIES);
-  const [scoreMap, setScoreMap]             = useState({});
-  const [posMap, setPosMap]                 = useState({});
-  const [goalieScoreMap, setGoalieScoreMap] = useState({});
+  const saved = loadState();
+  const [skaters, setSkaters]               = useState(saved?.skaters ?? DEFAULT_SKATERS);
+  const [goalies, setGoalies]               = useState(saved?.goalies ?? DEFAULT_GOALIES);
+  const [scoreMap, setScoreMap]             = useState(saved?.scoreMap ?? {});
+  const [posMap, setPosMap]                 = useState(saved?.posMap ?? {});
+  const [goalieScoreMap, setGoalieScoreMap] = useState(saved?.goalieScoreMap ?? {});
   const [view, setView]                     = useState("roster");
   const [selected, setSelected]             = useState(0);
   const [lookupQuery, setLookupQuery]       = useState("");
@@ -223,7 +240,53 @@ function App() {
   const [dragOver, setDragOver]             = useState(false);
   const [csvStatus, setCsvStatus]           = useState(null);
   const [showImport, setShowImport]         = useState(false);
-  const fileRef = useRef();
+  const [savedAt, setSavedAt]               = useState(saved?.savedAt ?? null);
+  const fileRef   = useRef();
+  const stateRef  = useRef();
+  const importRef = useRef();
+
+  // Auto-save to localStorage on any state change
+  React.useEffect(() => {
+    const state = { skaters, goalies, scoreMap, posMap, goalieScoreMap };
+    saveState(state);
+    setSavedAt(Date.now());
+  }, [skaters, goalies, scoreMap, posMap, goalieScoreMap]);
+
+  function exportJSON() {
+    const state = { skaters, goalies, scoreMap, posMap, goalieScoreMap, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "hockey_draft_state.json"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importJSON(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const state = JSON.parse(e.target.result);
+        if (!state.skaters) throw new Error("Invalid state file");
+        setSkaters(state.skaters);
+        setGoalies(state.goalies ?? DEFAULT_GOALIES);
+        setScoreMap(state.scoreMap ?? {});
+        setPosMap(state.posMap ?? {});
+        setGoalieScoreMap(state.goalieScoreMap ?? {});
+        setSelected(0);
+        setCsvStatus({ type:"success", message:`✅ State loaded from ${file.name}` });
+      } catch(err) {
+        setCsvStatus({ type:"error", message:"❌ Invalid state file: " + err.message });
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function formatSavedAt(ts) {
+    if (!ts) return null;
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  }
 
   function handleCSV(file) {
     if (!file) return;
@@ -386,11 +449,25 @@ function App() {
             style={{padding:"6px 14px",borderRadius:6,border:"1px solid #e67e22",background:"#fff",color:"#e67e22",cursor:"pointer",fontWeight:600,fontSize:13}}>
             🔀 Re-Draft
           </button>
+          <button onClick={exportJSON}
+            style={{padding:"6px 14px",borderRadius:6,border:"1px solid #27ae60",background:"#fff",color:"#27ae60",cursor:"pointer",fontWeight:600,fontSize:13}}>
+            💾 Export
+          </button>
+          <button onClick={()=>importRef.current.click()}
+            style={{padding:"6px 14px",borderRadius:6,border:"1px solid #8e44ad",background:"#fff",color:"#8e44ad",cursor:"pointer",fontWeight:600,fontSize:13}}>
+            📤 Load State
+          </button>
+          <input type="file" accept=".json" ref={importRef} style={{display:"none"}} onChange={e=>importJSON(e.target.files[0])}/>
         </div>
       </div>
-      <p style={{margin:"0 0 8px",color:"#888",fontSize:13}}>
+      <p style={{margin:"0 0 4px",color:"#888",fontSize:13}}>
         {skaters.filter(s=>s.origPos==="F").length} forwards · {skaters.filter(s=>s.origPos==="D").length} defensemen · {goalies.length} goalies
       </p>
+      {savedAt && (
+        <p style={{margin:"0 0 8px",fontSize:11,color:"#bbb"}}>
+          💾 Last saved: {formatSavedAt(savedAt)}
+        </p>
+      )}
 
       {csvStatus && (
         <div style={{marginBottom:12,padding:"8px 14px",borderRadius:6,fontSize:13,

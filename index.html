@@ -21,6 +21,10 @@ input, select, button { font-family: inherit; }
 <script type="text/babel">
 const { useState, useRef } = React;
 
+const STORAGE_KEY = "hockey_draft_v1";
+function loadState() { try { const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; } catch(e){return null;} }
+function saveState(s) { try { localStorage.setItem(STORAGE_KEY,JSON.stringify({...s,savedAt:Date.now()})); } catch(e){} }
+
 const captainNames = ["Dean Koch","Mike McLeod","Jake Mcleod","Bob Lee","Bryan Boechler","Andy Prefontaine","Chris Coltman","Jeremy Gukert"];
 const familyGroups = [
   { label:"Father & Son", color:"#e74c3c", members:["Dennis Regan","Nicolas Regan"] },
@@ -34,50 +38,52 @@ const familyGroups = [
 
 function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
 
-function parseCSV(rows) {
-  const skaters = [], goalies = [];
+function parseCSVRows(rows) {
+  const skaters=[], goalies=[];
   rows.forEach(r => {
-    const pos = (r['Position']||'').trim();
-    const name = `${(r['first name']||'').trim()} ${(r['last name']||'').trim()}`.trim();
-    if (!name || name === ' ') return;
-    const score = parseFloat(r['Pre Tournament Score']);
-    const origScore = isNaN(score) ? null : score;
-    const bday = r['birthday']||'';
-    const byear = bday ? parseInt(bday.split('-')[0]) : null;
-    const age = byear ? 2026 - byear : 50;
-    const weight = Math.abs(parseInt(r['Weight'])) || 180;
-    if (pos === 'Goalie') goalies.push({ name, score: origScore ?? 10, age, weight });
-    else if (pos === 'Forward' || pos === 'Defense')
-      skaters.push({ name, origPos: pos === 'Defense' ? 'D' : 'F', origScore, age, weight });
+    const pos=(r['Position']||'').trim();
+    const fn=(r['first name']||r['fisrt name']||'').trim();
+    const ln=(r['last name']||'').trim();
+    const name=`${fn} ${ln}`.trim();
+    if(!name||name===' ') return;
+    const scoreRaw=parseFloat(r['Pre Tournament Score']);
+    const origScore=isNaN(scoreRaw)||scoreRaw<0?null:scoreRaw;
+    const bday=r['birthday']||'';
+    const byear=bday?parseInt(bday.split('-')[0]):null;
+    const age=byear?2026-byear:50;
+    const weight=Math.abs(parseInt(r['Weight']))||180;
+    if(pos==='Goalie') goalies.push({name,score:origScore??10,age,weight});
+    else if(pos==='Forward'||pos==='Defense')
+      skaters.push({name,origPos:pos==='Defense'?'D':'F',origScore,age,weight});
   });
-  return { skaters, goalies };
+  return {skaters,goalies};
 }
 
-function buildTeams(skaters, goalies, scoreMap, posMap, goalieScoreMap) {
-  const players = skaters.map(s => ({
-    name: s.name, pos: posMap[s.name] ?? s.origPos,
-    score: scoreMap[s.name] ?? (s.origScore ?? 5),
-    age: s.age, weight: s.weight,
-    unrated: s.origScore === null && scoreMap[s.name] === undefined,
-    captain: captainNames.some(c => c.toLowerCase() === s.name.toLowerCase()),
+function buildTeams(skaters,goalies,scoreMap,posMap,goalieScoreMap) {
+  const players=skaters.map(s=>({
+    name:s.name, pos:posMap[s.name]??s.origPos,
+    score:scoreMap[s.name]??(s.origScore??5),
+    age:s.age, weight:s.weight,
+    unrated:s.origScore===null&&scoreMap[s.name]===undefined,
+    captain:captainNames.some(c=>c.toLowerCase()===s.name.toLowerCase()),
   }));
-  const gList = goalies.map(g => ({ ...g, score: goalieScoreMap[g.name] ?? g.score }));
-  const forwards = players.filter(p=>p.pos==="F"), defense = players.filter(p=>p.pos==="D");
-  const captainF = forwards.filter(p=>p.captain), captainD = defense.filter(p=>p.captain);
-  const nonCapF = forwards.filter(p=>!p.captain), nonCapD = defense.filter(p=>!p.captain);
-  const N = gList.length || 8;
-  function snakeDraft(list, n) {
-    const t = Array.from({length:n},()=>[]);
-    list.forEach((p,i)=>{ const r=Math.floor(i/n),pos=i%n; t[r%2===0?pos:n-1-pos].push(p); });
+  const gList=goalies.map(g=>({...g,score:goalieScoreMap[g.name]??g.score}));
+  const forwards=players.filter(p=>p.pos==="F"), defense=players.filter(p=>p.pos==="D");
+  const captainF=forwards.filter(p=>p.captain), captainD=defense.filter(p=>p.captain);
+  const nonCapF=forwards.filter(p=>!p.captain), nonCapD=defense.filter(p=>!p.captain);
+  const N=gList.length||8;
+  function snakeDraft(list,n){
+    const t=Array.from({length:n},()=>[]);
+    list.forEach((p,i)=>{const r=Math.floor(i/n),pos=i%n;t[r%2===0?pos:n-1-pos].push(p);});
     return t;
   }
-  const allCaps = [...captainF,...captainD].sort((a,b)=>b.score-a.score);
-  const fBase = Array.from({length:N},()=>[]), dBase = Array.from({length:N},()=>[]);
-  allCaps.forEach((c,i)=>{ if(i>=N) return; if(c.pos==="F") fBase[i].push(c); else dBase[i].push(c); });
-  const draftF = snakeDraft([...nonCapF].sort((a,b)=>b.score-a.score), N);
-  const draftD = snakeDraft([...nonCapD].sort((a,b)=>b.score-a.score), N);
-  const fTeams = fBase.map((b,i)=>[...b,...draftF[i]]);
-  const dTeams = dBase.map((b,i)=>[...b,...draftD[i]]);
+  const allCaps=[...captainF,...captainD].sort((a,b)=>b.score-a.score);
+  const fBase=Array.from({length:N},()=>[]), dBase=Array.from({length:N},()=>[]);
+  allCaps.forEach((c,i)=>{if(i>=N)return;if(c.pos==="F")fBase[i].push(c);else dBase[i].push(c);});
+  const draftF=snakeDraft([...nonCapF].sort((a,b)=>b.score-a.score),N);
+  const draftD=snakeDraft([...nonCapD].sort((a,b)=>b.score-a.score),N);
+  const fTeams=fBase.map((b,i)=>[...b,...draftF[i]]);
+  const dTeams=dBase.map((b,i)=>[...b,...draftD[i]]);
   for(let i=0;i<N;i++){
     while(dTeams[i].length<5){
       let donorIdx=-1,maxD=5;
@@ -95,7 +101,7 @@ function buildTeams(skaters, goalies, scoreMap, posMap, goalieScoreMap) {
   const skaterRank=fTeams.map((f,i)=>({idx:i,avg:avg([...f,...dTeams[i]].map(p=>p.score))})).sort((a,b)=>a.avg-b.avg);
   const sortedG=[...gList].sort((a,b)=>b.score-a.score);
   const goalieMap={};
-  skaterRank.forEach((t,i)=>{if(sortedG[i]) goalieMap[t.idx]={...sortedG[i],pos:"G"};});
+  skaterRank.forEach((t,i)=>{if(sortedG[i])goalieMap[t.idx]={...sortedG[i],pos:"G"};});
   let ts=fTeams.map((f,i)=>({id:i+1,players:[...f,...dTeams[i],...(goalieMap[i]?[goalieMap[i]]:[])]}));
   function spreadOf(v){return v.length?Math.max(...v)-Math.min(...v):0;}
   for(let iter=0;iter<1000;iter++){
@@ -134,211 +140,231 @@ function buildTeams(skaters, goalies, scoreMap, posMap, goalieScoreMap) {
 
 function teamStats(team) {
   const ps=team.players,fP=ps.filter(p=>p.pos==="F"),dP=ps.filter(p=>p.pos==="D");
-  return { fwd:fP.length,def:dP.length,goal:ps.filter(p=>p.pos==="G").length,
+  return {fwd:fP.length,def:dP.length,goal:ps.filter(p=>p.pos==="G").length,
     avgScore:avg(ps.map(p=>p.score)),avgFwdScore:avg(fP.map(p=>p.score)),
     avgDefScore:avg(dP.map(p=>p.score)),avgAge:avg(ps.map(p=>p.age)),
-    avgWeight:avg(ps.map(p=>p.weight)),total:ps.length };
+    avgWeight:avg(ps.map(p=>p.weight)),total:ps.length};
 }
 
 const teamColors=["#e74c3c","#e67e22","#f1c40f","#2ecc71","#1abc9c","#3498db","#9b59b6","#e91e63"];
 const teamNames=["Team 1","Team 2","Team 3","Team 4","Team 5","Team 6","Team 7","Team 8"];
 
 const DEFAULT_GOALIES = [
-  {name:"Ed Mort",score:16,age:55,weight:160},{name:"John Breen",score:14,age:65,weight:240},
-  {name:"Joel Kooistra",score:12,age:44,weight:215},{name:"Ryan Cameron",score:12,age:44,weight:216},
-  {name:"AJ Hay",score:12,age:25,weight:150},{name:"Allan Manz",score:10,age:62,weight:220},
-  {name:"Michael Guzik",score:10,age:59,weight:180},{name:"Vaughn Thomas",score:10,age:21,weight:130},
+  {name:"John Breen",   score:14, age:2026-1961, weight:240},
+  {name:"Lee Herle",    score:12, age:2026-1968, weight:195},
+  {name:"Joel Kooistra",score:12, age:2026-1982, weight:215},
+  {name:"Ryan Cameron", score:12, age:2026-1982, weight:216},
+  {name:"AJ Hay",       score:12, age:2026-2001, weight:150},
+  {name:"Allan Manz",   score:10, age:2026-1964, weight:220},
+  {name:"Michael Guzik",score:10, age:2026-1967, weight:180},
+  {name:"Vaughn Thomas",score:10, age:2026-2005, weight:130},
 ];
 
 const DEFAULT_SKATERS = [
-  {name:"Murray Desrosiers",origPos:"D",origScore:null,age:57,weight:185},{name:"Clayton Gauthier",origPos:"F",origScore:null,age:55,weight:250},
-  {name:"Walden Chow",origPos:"F",origScore:null,age:56,weight:160},{name:"Derek Munn",origPos:"F",origScore:null,age:51,weight:165},
-  {name:"Kurt Lock",origPos:"F",origScore:5,age:53,weight:190},{name:"Rick Ingalls",origPos:"F",origScore:null,age:65,weight:185},
-  {name:"Dustin Sengaus",origPos:"F",origScore:5,age:47,weight:225},{name:"Brent Duncanson",origPos:"F",origScore:6,age:60,weight:190},
-  {name:"Doug Scott",origPos:"F",origScore:1,age:51,weight:190},{name:"William Fluet",origPos:"F",origScore:8,age:60,weight:205},
-  {name:"David Kisilevsky",origPos:"F",origScore:4,age:54,weight:170},{name:"Jamie Burley",origPos:"F",origScore:6,age:43,weight:165},
-  {name:"Steve Glowa",origPos:"F",origScore:7,age:53,weight:155},{name:"Trevor Korol",origPos:"F",origScore:null,age:36,weight:180},
-  {name:"Dustin Boone",origPos:"F",origScore:10,age:32,weight:180},{name:"Ryan Hilderman",origPos:"F",origScore:null,age:49,weight:180},
-  {name:"Bob Baxter",origPos:"F",origScore:null,age:73,weight:160},{name:"Chris Dumanowski",origPos:"F",origScore:5,age:59,weight:240},
-  {name:"Steven Hoffort",origPos:"F",origScore:5,age:57,weight:185},{name:"Dale Robinson",origPos:"F",origScore:6,age:63,weight:175},
-  {name:"Connor O'Leary",origPos:"F",origScore:10,age:36,weight:190},{name:"Sean McCully",origPos:"D",origScore:7,age:54,weight:215},
-  {name:"Wade Weaver",origPos:"D",origScore:8,age:40,weight:240},{name:"John Nunziata",origPos:"F",origScore:5,age:61,weight:210},
-  {name:"Brett Burgess",origPos:"F",origScore:6,age:49,weight:175},{name:"Simon McLeod",origPos:"F",origScore:10,age:27,weight:185},
-  {name:"Lucas McLeod",origPos:"F",origScore:10,age:30,weight:220},{name:"Craig Quipp",origPos:"D",origScore:9,age:53,weight:175},
-  {name:"Sylvain Drolet",origPos:"D",origScore:7,age:56,weight:185},{name:"Denis St-Pierre",origPos:"F",origScore:6,age:61,weight:182},
-  {name:"Jackson Perry",origPos:"F",origScore:9,age:48,weight:175},{name:"Neil O'Connor",origPos:"F",origScore:5,age:65,weight:190},
-  {name:"Charlie Crutchfield",origPos:"D",origScore:null,age:74,weight:175},{name:"Brad Milne",origPos:"D",origScore:null,age:41,weight:230},
-  {name:"Garnet Amundson",origPos:"D",origScore:5,age:65,weight:180},{name:"Arnie Brownlees",origPos:"D",origScore:1,age:63,weight:200},
-  {name:"Greg Beauchamp",origPos:"F",origScore:null,age:64,weight:195},{name:"Carter Siebens",origPos:"D",origScore:6,age:63,weight:195},
-  {name:"Randal Davidson",origPos:"D",origScore:6,age:57,weight:160},{name:"Dennis Regan",origPos:"F",origScore:2,age:59,weight:225},
-  {name:"Nicolas Regan",origPos:"F",origScore:11,age:25,weight:180},{name:"Stephen Larsen",origPos:"D",origScore:5,age:60,weight:190},
-  {name:"John Boone",origPos:"F",origScore:3,age:66,weight:170},{name:"Chris Coltman",origPos:"F",origScore:6,age:56,weight:180},
-  {name:"Chris Trudel",origPos:"F",origScore:5,age:52,weight:210},{name:"Ryan Baht",origPos:"F",origScore:8,age:45,weight:205},
-  {name:"Chris Wyman",origPos:"F",origScore:null,age:56,weight:215},{name:"Logan Zahn",origPos:"D",origScore:8,age:30,weight:155},
-  {name:"Nolan Olexyn",origPos:"D",origScore:9,age:31,weight:220},{name:"Trevor McNally",origPos:"F",origScore:8,age:30,weight:165},
-  {name:"Blake Hryciw",origPos:"F",origScore:3,age:41,weight:180},{name:"Mark McCalder",origPos:"F",origScore:1,age:70,weight:170},
-  {name:"Ryan Pinkney",origPos:"F",origScore:7,age:43,weight:180},{name:"Chris Winkler",origPos:"D",origScore:5,age:62,weight:260},
-  {name:"Adam Anderson",origPos:"F",origScore:10,age:40,weight:200},{name:"Blair Kattler",origPos:"F",origScore:8,age:36,weight:160},
-  {name:"Jake Mcleod",origPos:"D",origScore:7,age:34,weight:210},{name:"Dwayne Koch",origPos:"D",origScore:7,age:56,weight:230},
-  {name:"Bryan Boechler",origPos:"D",origScore:7,age:54,weight:200},{name:"Darren Pearson",origPos:"D",origScore:3,age:71,weight:175},
-  {name:"Greg Korsrud",origPos:"F",origScore:5,age:56,weight:210},{name:"Stovel Ferguson",origPos:"D",origScore:1,age:55,weight:190},
-  {name:"David Macgillivray",origPos:"F",origScore:3,age:53,weight:225},{name:"Ben Rye",origPos:"F",origScore:5,age:39,weight:200},
-  {name:"Joe McCormick",origPos:"F",origScore:6,age:41,weight:280},{name:"Justin Kurtenbach",origPos:"F",origScore:6,age:45,weight:180},
-  {name:"Paul Chartrand",origPos:"D",origScore:6,age:52,weight:205},{name:"Jens Stemo",origPos:"F",origScore:9,age:51,weight:280},
-  {name:"Carson Nelson",origPos:"F",origScore:6,age:39,weight:240},{name:"Lorne Kattler",origPos:"D",origScore:4,age:65,weight:185},
-  {name:"Jeff Purdy",origPos:"F",origScore:7,age:46,weight:175},{name:"Ryan Domes",origPos:"D",origScore:7,age:46,weight:190},
-  {name:"Jeremy Gukert",origPos:"F",origScore:8,age:48,weight:185},{name:"Stu Campbell",origPos:"D",origScore:5,age:69,weight:185},
-  {name:"Mike McLeod",origPos:"D",origScore:5,age:66,weight:165},{name:"Lorne Anderson",origPos:"D",origScore:4,age:67,weight:220},
-  {name:"Andrew Arthur",origPos:"F",origScore:2,age:64,weight:275},{name:"Don Burkinshaw",origPos:"F",origScore:4,age:71,weight:230},
-  {name:"Dean Koch",origPos:"D",origScore:5,age:63,weight:205},{name:"Kent Greff",origPos:"D",origScore:9,age:50,weight:170},
-  {name:"Paul Ketchabaw",origPos:"F",origScore:6,age:65,weight:165},{name:"Shawn Laursen",origPos:"F",origScore:7,age:59,weight:180},
-  {name:"Steve Paul",origPos:"D",origScore:5,age:69,weight:200},{name:"Scott Dowler",origPos:"D",origScore:8,age:54,weight:185},
-  {name:"Phil Prefontaine",origPos:"D",origScore:3,age:65,weight:200},{name:"Jason Guenther",origPos:"F",origScore:4,age:56,weight:185},
-  {name:"Gordon Watson",origPos:"F",origScore:1,age:33,weight:190},{name:"Ron Watson",origPos:"F",origScore:5,age:69,weight:200},
-  {name:"Andy Prefontaine",origPos:"F",origScore:8,age:48,weight:240},{name:"Joseph Troiano",origPos:"F",origScore:4,age:66,weight:195},
-  {name:"Neill McQuade",origPos:"F",origScore:4,age:39,weight:190},{name:"Matt Sakowsky",origPos:"F",origScore:2,age:58,weight:160},
-  {name:"Kevin Oszust",origPos:"F",origScore:4,age:56,weight:175},{name:"Jordan Wilson",origPos:"D",origScore:8,age:41,weight:210},
-  {name:"Curtis Morgan",origPos:"D",origScore:8,age:49,weight:200},{name:"John Robertson",origPos:"F",origScore:3,age:56,weight:215},
-  {name:"Olivier Garsault",origPos:"D",origScore:2,age:63,weight:220},{name:"Nolan Szabinio",origPos:"D",origScore:5,age:46,weight:180},
-  {name:"Bob Lee",origPos:"D",origScore:6,age:65,weight:185},{name:"Terry Olexyn",origPos:"D",origScore:5,age:62,weight:235},
-  {name:"Darren Dillenbeck",origPos:"D",origScore:7,age:53,weight:190},{name:"Jon Schnell",origPos:"D",origScore:3,age:65,weight:200},
-  {name:"Robbie Stevenson",origPos:"D",origScore:7,age:42,weight:225},{name:"Brent Avender",origPos:"F",origScore:6,age:60,weight:200},
-  {name:"Paul Rubner",origPos:"F",origScore:1,age:64,weight:200},{name:"James Skawski",origPos:"D",origScore:3,age:63,weight:240},
-  {name:"Kyle Kilback",origPos:"F",origScore:7,age:50,weight:240},{name:"Brendan Koch",origPos:"F",origScore:9,age:34,weight:205},
+  {name:"Curtis Kerth",      origPos:"D",origScore:7,  age:2026-1977,weight:170},
+  {name:"Murray Desrosiers", origPos:"D",origScore:6,  age:2026-1969,weight:185},
+  {name:"Clayton Gauthier",  origPos:"F",origScore:null,age:2026-1971,weight:250},
+  {name:"Walden Chow",       origPos:"F",origScore:1,  age:2026-1970,weight:160},
+  {name:"Derek Munn",        origPos:"F",origScore:6,  age:2026-1975,weight:165},
+  {name:"Kurt Lock",         origPos:"F",origScore:5,  age:2026-1973,weight:190},
+  {name:"Rick Ingalls",      origPos:"F",origScore:4,  age:2026-1961,weight:185},
+  {name:"Dustin Sengaus",    origPos:"F",origScore:5,  age:2026-1979,weight:225},
+  {name:"Brent Duncanson",   origPos:"F",origScore:6,  age:2026-1966,weight:190},
+  {name:"Doug Scott",        origPos:"F",origScore:1,  age:2026-1975,weight:190},
+  {name:"William Fluet",     origPos:"F",origScore:8,  age:2026-1966,weight:205},
+  {name:"David Kisilevsky",  origPos:"F",origScore:4,  age:2026-1972,weight:170},
+  {name:"Jamie Burley",      origPos:"F",origScore:6,  age:2026-1983,weight:165},
+  {name:"Steve Glowa",       origPos:"F",origScore:7,  age:2026-1973,weight:155},
+  {name:"Trevor Korol",      origPos:"F",origScore:4,  age:2026-1990,weight:180},
+  {name:"Dustin Boone",      origPos:"F",origScore:10, age:2026-1994,weight:180},
+  {name:"Ryan Hilderman",    origPos:"F",origScore:7,  age:2026-1977,weight:180},
+  {name:"Bob Baxter",        origPos:"F",origScore:4,  age:2026-1953,weight:160},
+  {name:"Chris Dumanowski",  origPos:"F",origScore:5,  age:2026-1967,weight:240},
+  {name:"Steven Hoffort",    origPos:"F",origScore:5,  age:2026-1969,weight:185},
+  {name:"Dale Robinson",     origPos:"F",origScore:6,  age:2026-1963,weight:175},
+  {name:"Connor O'Leary",    origPos:"F",origScore:10, age:2026-1990,weight:190},
+  {name:"Sean McCully",      origPos:"D",origScore:7,  age:2026-1972,weight:215},
+  {name:"Wade Weaver",       origPos:"D",origScore:9,  age:2026-1986,weight:240},
+  {name:"John Nunziata",     origPos:"F",origScore:5,  age:2026-1965,weight:210},
+  {name:"Brett Burgess",     origPos:"F",origScore:6,  age:2026-1977,weight:175},
+  {name:"Simon McLeod",      origPos:"F",origScore:10, age:2026-1999,weight:185},
+  {name:"Lucas McLeod",      origPos:"F",origScore:10, age:2026-1996,weight:220},
+  {name:"Craig Quipp",       origPos:"D",origScore:9,  age:2026-1973,weight:175},
+  {name:"Sylvain Drolet",    origPos:"D",origScore:7,  age:2026-1970,weight:185},
+  {name:"Denis St-Pierre",   origPos:"F",origScore:6,  age:2026-1965,weight:182},
+  {name:"Jackson Perry",     origPos:"F",origScore:9,  age:2026-1978,weight:175},
+  {name:"Neil O'Connor",     origPos:"F",origScore:5,  age:2026-1961,weight:190},
+  {name:"Charlie Crutchfield",origPos:"D",origScore:4, age:2026-1952,weight:175},
+  {name:"Brad Milne",        origPos:"D",origScore:2,  age:2026-1985,weight:230},
+  {name:"Garnet Amundson",   origPos:"D",origScore:5,  age:2026-1961,weight:180},
+  {name:"Arnie Brownlees",   origPos:"D",origScore:1,  age:2026-1963,weight:200},
+  {name:"Greg Beauchamp",    origPos:"F",origScore:4,  age:2026-1962,weight:195},
+  {name:"Carter Siebens",    origPos:"D",origScore:6,  age:2026-1963,weight:195},
+  {name:"Randal Davidson",   origPos:"D",origScore:6,  age:2026-1969,weight:160},
+  {name:"Dennis Regan",      origPos:"F",origScore:2,  age:2026-1967,weight:225},
+  {name:"Nicolas Regan",     origPos:"F",origScore:11, age:2026-2001,weight:180},
+  {name:"Stephen Larsen",    origPos:"D",origScore:5,  age:2026-1966,weight:190},
+  {name:"John Boone",        origPos:"F",origScore:3,  age:2026-1960,weight:170},
+  {name:"Chris Coltman",     origPos:"F",origScore:6,  age:2026-1970,weight:180},
+  {name:"Chris Trudel",      origPos:"F",origScore:5,  age:2026-1974,weight:210},
+  {name:"Ryan Baht",         origPos:"F",origScore:8,  age:2026-1981,weight:205},
+  {name:"Chris Wyman",       origPos:"F",origScore:6,  age:2026-1970,weight:215},
+  {name:"Logan Zahn",        origPos:"D",origScore:8,  age:2026-1996,weight:155},
+  {name:"Nolan Olexyn",      origPos:"D",origScore:9,  age:2026-1995,weight:220},
+  {name:"Trevor McNally",    origPos:"F",origScore:8,  age:2026-1996,weight:165},
+  {name:"Blake Hryciw",      origPos:"F",origScore:3,  age:2026-1985,weight:180},
+  {name:"Mark McCalder",     origPos:"F",origScore:1,  age:2026-1956,weight:170},
+  {name:"Ryan Pinkney",      origPos:"F",origScore:7,  age:2026-1983,weight:180},
+  {name:"Chris Winkler",     origPos:"D",origScore:5,  age:2026-1964,weight:260},
+  {name:"Adam Anderson",     origPos:"F",origScore:10, age:2026-1986,weight:200},
+  {name:"Blair Kattler",     origPos:"F",origScore:8,  age:2026-1990,weight:160},
+  {name:"Jake Mcleod",       origPos:"D",origScore:7,  age:2026-1992,weight:210},
+  {name:"Dwayne Koch",       origPos:"D",origScore:7,  age:2026-1970,weight:230},
+  {name:"Bryan Boechler",    origPos:"D",origScore:7,  age:2026-1972,weight:200},
+  {name:"Darren Pearson",    origPos:"D",origScore:3,  age:2026-1955,weight:175},
+  {name:"Greg Korsrud",      origPos:"F",origScore:4,  age:2026-1970,weight:210},
+  {name:"Stovel Ferguson",   origPos:"D",origScore:1,  age:2026-1971,weight:190},
+  {name:"David Macgillivray",origPos:"F",origScore:3,  age:2026-1973,weight:225},
+  {name:"Ben Rye",           origPos:"F",origScore:5,  age:2026-1987,weight:200},
+  {name:"Joe McCormick",     origPos:"F",origScore:6,  age:2026-1985,weight:280},
+  {name:"Justin Kurtenbach", origPos:"F",origScore:6,  age:2026-1981,weight:180},
+  {name:"Paul Chartrand",    origPos:"D",origScore:6,  age:2026-1974,weight:205},
+  {name:"Jens Stemo",        origPos:"F",origScore:9,  age:2026-1975,weight:280},
+  {name:"Carson Nelson",     origPos:"F",origScore:6,  age:2026-1987,weight:240},
+  {name:"Lorne Kattler",     origPos:"D",origScore:4,  age:2026-1961,weight:185},
+  {name:"Jeff Purdy",        origPos:"F",origScore:7,  age:2026-1980,weight:175},
+  {name:"Ryan Domes",        origPos:"D",origScore:7,  age:2026-1980,weight:190},
+  {name:"Jeremy Gukert",     origPos:"F",origScore:8,  age:2026-1978,weight:185},
+  {name:"Stu Campbell",      origPos:"D",origScore:5,  age:2026-1957,weight:185},
+  {name:"Mike McLeod",       origPos:"D",origScore:5,  age:2026-1960,weight:165},
+  {name:"Lorne Anderson",    origPos:"D",origScore:4,  age:2026-1959,weight:220},
+  {name:"Andrew Arthur",     origPos:"F",origScore:2,  age:2026-1962,weight:275},
+  {name:"Don Burkinshaw",    origPos:"F",origScore:4,  age:2026-1955,weight:230},
+  {name:"Dean Koch",         origPos:"D",origScore:5,  age:2026-1963,weight:205},
+  {name:"Kent Greff",        origPos:"D",origScore:9,  age:2026-1976,weight:170},
+  {name:"Paul Ketchabaw",    origPos:"F",origScore:6,  age:2026-1961,weight:165},
+  {name:"Shawn Laursen",     origPos:"F",origScore:7,  age:2026-1967,weight:180},
+  {name:"Steve Paul",        origPos:"D",origScore:5,  age:2026-1957,weight:200},
+  {name:"Scott Dowler",      origPos:"D",origScore:8,  age:2026-1972,weight:185},
+  {name:"Phil Prefontaine",  origPos:"D",origScore:3,  age:2026-1961,weight:200},
+  {name:"Jason Guenther",    origPos:"F",origScore:4,  age:2026-1970,weight:185},
+  {name:"Gordon Watson",     origPos:"F",origScore:1,  age:2026-1993,weight:190},
+  {name:"Ron Watson",        origPos:"F",origScore:5,  age:2026-1957,weight:200},
+  {name:"Andy Prefontaine",  origPos:"F",origScore:8,  age:2026-1978,weight:240},
+  {name:"Joseph Troiano",    origPos:"F",origScore:4,  age:2026-1960,weight:195},
+  {name:"Neill McQuade",     origPos:"F",origScore:4,  age:2026-1987,weight:190},
+  {name:"Matt Sakowsky",     origPos:"F",origScore:2,  age:2026-1968,weight:160},
+  {name:"Kevin Oszust",      origPos:"F",origScore:4,  age:2026-1970,weight:175},
+  {name:"Jordan Wilson",     origPos:"D",origScore:8,  age:2026-1985,weight:210},
+  {name:"Curtis Morgan",     origPos:"D",origScore:8,  age:2026-1977,weight:200},
+  {name:"John Robertson",    origPos:"F",origScore:3,  age:2026-1970,weight:215},
+  {name:"Olivier Garsault",  origPos:"D",origScore:2,  age:2026-1963,weight:220},
+  {name:"Nolan Szabinio",    origPos:"D",origScore:5,  age:2026-1980,weight:180},
+  {name:"Bob Lee",           origPos:"D",origScore:6,  age:2026-1961,weight:185},
+  {name:"Terry Olexyn",      origPos:"D",origScore:5,  age:2026-1964,weight:235},
+  {name:"Darren Dillenbeck", origPos:"D",origScore:7,  age:2026-1973,weight:190},
+  {name:"Jon Schnell",       origPos:"D",origScore:3,  age:2026-1961,weight:200},
+  {name:"Robbie Stevenson",  origPos:"D",origScore:7,  age:2026-1984,weight:225},
+  {name:"Brent Avender",     origPos:"F",origScore:6,  age:2026-1966,weight:200},
+  {name:"Paul Rubner",       origPos:"F",origScore:1,  age:2026-1962,weight:200},
+  {name:"James Skawski",     origPos:"D",origScore:3,  age:2026-1963,weight:240},
+  {name:"Kyle Kilback",      origPos:"F",origScore:7,  age:2026-1976,weight:240},
+  {name:"Brendan Koch",      origPos:"F",origScore:9,  age:2026-1992,weight:205},
 ];
-
-const STORAGE_KEY = "hockey_draft_v1";
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch(e) { return null; }
-}
-
-function saveState(state) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, savedAt: Date.now() }));
-  } catch(e) {}
-}
 
 function App() {
   const saved = loadState();
-  const [skaters, setSkaters]               = useState(saved?.skaters ?? DEFAULT_SKATERS);
-  const [goalies, setGoalies]               = useState(saved?.goalies ?? DEFAULT_GOALIES);
-  const [scoreMap, setScoreMap]             = useState(saved?.scoreMap ?? {});
-  const [posMap, setPosMap]                 = useState(saved?.posMap ?? {});
-  const [goalieScoreMap, setGoalieScoreMap] = useState(saved?.goalieScoreMap ?? {});
-  const [view, setView]                     = useState("roster");
-  const [selected, setSelected]             = useState(0);
-  const [lookupQuery, setLookupQuery]       = useState("");
-  const [lookupResult, setLookupResult]     = useState(null);
-  const [lookupDone, setLookupDone]         = useState(false);
-  const [editing, setEditing]               = useState(null);
-  const [editVal, setEditVal]               = useState("");
-  const [dragOver, setDragOver]             = useState(false);
-  const [csvStatus, setCsvStatus]           = useState(null);
-  const [showImport, setShowImport]         = useState(false);
-  const [savedAt, setSavedAt]               = useState(saved?.savedAt ?? null);
-  const fileRef   = useRef();
-  const stateRef  = useRef();
-  const importRef = useRef();
+  const [skaters,setSkaters]               = useState(saved?.skaters??DEFAULT_SKATERS);
+  const [goalies,setGoalies]               = useState(saved?.goalies??DEFAULT_GOALIES);
+  const [scoreMap,setScoreMap]             = useState(saved?.scoreMap??{});
+  const [posMap,setPosMap]                 = useState(saved?.posMap??{});
+  const [goalieScoreMap,setGoalieScoreMap] = useState(saved?.goalieScoreMap??{});
+  const [view,setView]                     = useState("roster");
+  const [selected,setSelected]             = useState(0);
+  const [lookupQuery,setLookupQuery]       = useState("");
+  const [lookupResult,setLookupResult]     = useState(null);
+  const [lookupDone,setLookupDone]         = useState(false);
+  const [editing,setEditing]               = useState(null);
+  const [editVal,setEditVal]               = useState("");
+  const [dragOver,setDragOver]             = useState(false);
+  const [csvStatus,setCsvStatus]           = useState(null);
+  const [showImport,setShowImport]         = useState(false);
+  const [savedAt,setSavedAt]               = useState(saved?.savedAt??null);
+  const fileRef=useRef(), importRef=useRef();
 
-  // Auto-save to localStorage on any state change
-  React.useEffect(() => {
-    const state = { skaters, goalies, scoreMap, posMap, goalieScoreMap };
-    saveState(state);
+  React.useEffect(()=>{
+    saveState({skaters,goalies,scoreMap,posMap,goalieScoreMap});
     setSavedAt(Date.now());
-  }, [skaters, goalies, scoreMap, posMap, goalieScoreMap]);
+  },[skaters,goalies,scoreMap,posMap,goalieScoreMap]);
 
-  function exportCSV() {
-    const currentTeams = buildTeams(skaters, goalies, scoreMap, posMap, goalieScoreMap);
-    const rows = [["Team","Name","Position","Score","Age","Weight (lbs)","Captain","Unrated"]];
-    currentTeams.forEach((team, i) => {
-      const teamLabel = teamNames[i] || `Team ${i+1}`;
-      [...team.players].sort((a,b) => {
-        const posOrder = {G:0,D:1,F:2};
-        return (posOrder[a.pos]??3) - (posOrder[b.pos]??3);
-      }).forEach(p => {
-        rows.push([
-          teamLabel,
-          p.name,
-          p.pos === "G" ? "Goalie" : p.pos === "F" ? "Forward" : "Defence",
-          p.unrated ? "" : p.score,
-          p.age,
-          p.weight,
-          p.captain ? "Yes" : "",
-          p.unrated ? "Yes" : "",
-        ]);
-      });
+  function handleCSV(file){
+    if(!file) return;
+    Papa.parse(file,{header:true,skipEmptyLines:true,complete:(results)=>{
+      try{
+        const {skaters:ns,goalies:ng}=parseCSVRows(results.data);
+        if(ns.length===0){setCsvStatus({type:'error',message:'No skaters found.'});return;}
+        setSkaters(ns); if(ng.length>0) setGoalies(ng);
+        setScoreMap({}); setPosMap({}); setGoalieScoreMap({});
+        setCsvStatus({type:'success',message:`✅ Loaded ${ns.length} skaters and ${ng.length} goalies from ${file.name}.`});
+        setShowImport(false); setSelected(0);
+      }catch(e){setCsvStatus({type:'error',message:'Failed: '+e.message});}
+    },error:(e)=>setCsvStatus({type:'error',message:'Read error: '+e.message})});
+  }
+
+  function exportCSV(){
+    const currentTeams=buildTeams(skaters,goalies,scoreMap,posMap,goalieScoreMap);
+    const rows=[["Team","Name","Position","Score","Age","Weight (lbs)","Captain","Unrated"]];
+    currentTeams.forEach((team,i)=>{
+      const label=teamNames[i]||`Team ${i+1}`;
+      [...team.players].sort((a,b)=>({G:0,D:1,F:2}[a.pos]??3)-({G:0,D:1,F:2}[b.pos]??3))
+        .forEach(p=>rows.push([label,p.name,
+          p.pos==="G"?"Goalie":p.pos==="F"?"Forward":"Defence",
+          p.unrated?"":p.score,p.age,p.weight,p.captain?"Yes":"",p.unrated?"Yes":""]));
     });
-    const csv = rows.map(r => r.map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "hockey_draft_rosters.csv"; a.click();
+    const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download="hockey_draft_rosters.csv"; a.click();
     URL.revokeObjectURL(url);
   }
 
-  function importJSON(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const state = JSON.parse(e.target.result);
-        if (!state.skaters) throw new Error("Invalid state file");
-        setSkaters(state.skaters);
-        setGoalies(state.goalies ?? DEFAULT_GOALIES);
-        setScoreMap(state.scoreMap ?? {});
-        setPosMap(state.posMap ?? {});
-        setGoalieScoreMap(state.goalieScoreMap ?? {});
-        setSelected(0);
-        setCsvStatus({ type:"success", message:`✅ State loaded from ${file.name}` });
-      } catch(err) {
-        setCsvStatus({ type:"error", message:"❌ Invalid state file: " + err.message });
-      }
+  function exportState(){
+    const state={skaters,goalies,scoreMap,posMap,goalieScoreMap,exportedAt:new Date().toISOString()};
+    const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download="hockey_draft_state.json"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importState(file){
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const state=JSON.parse(e.target.result);
+        if(!state.skaters) throw new Error("Invalid state file");
+        setSkaters(state.skaters); setGoalies(state.goalies??DEFAULT_GOALIES);
+        setScoreMap(state.scoreMap??{}); setPosMap(state.posMap??{}); setGoalieScoreMap(state.goalieScoreMap??{});
+        setSelected(0); setCsvStatus({type:'success',message:`✅ State loaded from ${file.name}`});
+      }catch(err){setCsvStatus({type:'error',message:'Invalid state file: '+err.message});}
     };
     reader.readAsText(file);
   }
 
-  function formatSavedAt(ts) {
-    if (!ts) return null;
-    const d = new Date(ts);
-    return d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
-  }
-
-  function handleCSV(file) {
-    if (!file) return;
-    Papa.parse(file, {
-      header: true, skipEmptyLines: true,
-      complete: (results) => {
-        try {
-          const { skaters: ns, goalies: ng } = parseCSV(results.data);
-          if (ns.length === 0) { setCsvStatus({type:'error',message:'No skaters found. Check your CSV format.'}); return; }
-          setSkaters(ns);
-          if (ng.length > 0) setGoalies(ng);
-          setScoreMap({}); setPosMap({}); setGoalieScoreMap({});
-          setCsvStatus({type:'success',message:`✅ Loaded ${ns.length} skaters and ${ng.length} goalies from ${file.name}. Draft re-run automatically.`});
-          setShowImport(false); setSelected(0);
-        } catch(e) { setCsvStatus({type:'error',message:'Failed to parse CSV: '+e.message}); }
-      },
-      error: (e) => setCsvStatus({type:'error',message:'Failed to read file: '+e.message})
-    });
-  }
-
-  function redraft() {
+  function redraft(){
     setScoreMap({}); setPosMap({}); setGoalieScoreMap({});
-    setSelected(0);
-    setCsvStatus({type:'success',message:'✅ Draft re-run with current player data.'});
+    setSelected(0); setCsvStatus({type:'success',message:'✅ Draft re-run.'});
   }
 
-  const teams    = buildTeams(skaters, goalies, scoreMap, posMap, goalieScoreMap);
-  const allStats = teams.map(teamStats);
-  const team     = teams[selected] || teams[0];
-  const stats    = teamStats(team);
-  const fwds     = team.players.filter(p=>p.pos==="F").sort((a,b)=>b.score-a.score);
-  const defs     = team.players.filter(p=>p.pos==="D").sort((a,b)=>b.score-a.score);
+  function formatTime(ts){ return ts?new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"}):null; }
+
+  const teams=buildTeams(skaters,goalies,scoreMap,posMap,goalieScoreMap);
+  const allStats=teams.map(teamStats);
+  const team=teams[selected]||teams[0];
+  const stats=teamStats(team);
+  const fwds=team.players.filter(p=>p.pos==="F").sort((a,b)=>b.score-a.score);
+  const defs=team.players.filter(p=>p.pos==="D").sort((a,b)=>b.score-a.score);
+  const color=i=>teamColors[i]||"#999";
 
   function startEdit(name,field,current){setEditing({name,field});setEditVal(String(current));}
   function commitEdit(){
@@ -349,8 +375,7 @@ function App() {
     else if(field==="goalieScore"){const v=parseFloat(editVal);if(!isNaN(v)&&v>=1&&v<=20)setGoalieScoreMap(p=>({...p,[name]:v}));}
     setEditing(null);
   }
-  const bs = bg => ({padding:"2px 6px",borderRadius:4,border:"none",background:bg,color:"#fff",cursor:"pointer",fontSize:11});
-  const color = i => teamColors[i] || "#999";
+  const bs=bg=>({padding:"2px 6px",borderRadius:4,border:"none",background:bg,color:"#fff",cursor:"pointer",fontSize:11});
 
   function PlayerRow({p,i}){
     const isES=editing?.name===p.name&&editing?.field==="score";
@@ -459,37 +484,36 @@ function App() {
     <div style={{fontFamily:"system-ui,sans-serif",maxWidth:960,margin:"0 auto",padding:16}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:4}}>
         <h2 style={{margin:0}}>🏒 Tournament Draft — {teams.length} Teams</h2>
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           <button onClick={()=>setShowImport(v=>!v)}
-            style={{padding:"6px 14px",borderRadius:6,border:"1px solid #3498db",
-              background:showImport?"#3498db":"#fff",color:showImport?"#fff":"#3498db",cursor:"pointer",fontWeight:600,fontSize:13}}>
+            style={{padding:"6px 12px",borderRadius:6,border:"1px solid #3498db",background:showImport?"#3498db":"#fff",color:showImport?"#fff":"#3498db",cursor:"pointer",fontWeight:600,fontSize:12}}>
             📂 Import CSV
           </button>
           <button onClick={redraft}
-            style={{padding:"6px 14px",borderRadius:6,border:"1px solid #e67e22",background:"#fff",color:"#e67e22",cursor:"pointer",fontWeight:600,fontSize:13}}>
+            style={{padding:"6px 12px",borderRadius:6,border:"1px solid #e67e22",background:"#fff",color:"#e67e22",cursor:"pointer",fontWeight:600,fontSize:12}}>
             🔀 Re-Draft
           </button>
           <button onClick={exportCSV}
-            style={{padding:"6px 14px",borderRadius:6,border:"1px solid #27ae60",background:"#fff",color:"#27ae60",cursor:"pointer",fontWeight:600,fontSize:13}}>
-            💾 Export
+            style={{padding:"6px 12px",borderRadius:6,border:"1px solid #27ae60",background:"#fff",color:"#27ae60",cursor:"pointer",fontWeight:600,fontSize:12}}>
+            📊 Export CSV
+          </button>
+          <button onClick={exportState}
+            style={{padding:"6px 12px",borderRadius:6,border:"1px solid #27ae60",background:"#fff",color:"#27ae60",cursor:"pointer",fontWeight:600,fontSize:12}}>
+            💾 Save State
           </button>
           <button onClick={()=>importRef.current.click()}
-            style={{padding:"6px 14px",borderRadius:6,border:"1px solid #8e44ad",background:"#fff",color:"#8e44ad",cursor:"pointer",fontWeight:600,fontSize:13}}>
+            style={{padding:"6px 12px",borderRadius:6,border:"1px solid #8e44ad",background:"#fff",color:"#8e44ad",cursor:"pointer",fontWeight:600,fontSize:12}}>
             📤 Load State
           </button>
-          <input type="file" accept=".json" ref={importRef} style={{display:"none"}} onChange={e=>importJSON(e.target.files[0])}/>
+          <input type="file" accept=".json" ref={importRef} style={{display:"none"}} onChange={e=>importState(e.target.files[0])}/>
         </div>
       </div>
-      <p style={{margin:"0 0 4px",color:"#888",fontSize:13}}>
+      <p style={{margin:"0 0 2px",color:"#888",fontSize:13}}>
         {skaters.filter(s=>s.origPos==="F").length} forwards · {skaters.filter(s=>s.origPos==="D").length} defensemen · {goalies.length} goalies
       </p>
-      {savedAt && (
-        <p style={{margin:"0 0 8px",fontSize:11,color:"#bbb"}}>
-          💾 Last saved: {formatSavedAt(savedAt)}
-        </p>
-      )}
+      {savedAt&&<p style={{margin:"0 0 8px",fontSize:11,color:"#bbb"}}>💾 Last saved: {formatTime(savedAt)}</p>}
 
-      {csvStatus && (
+      {csvStatus&&(
         <div style={{marginBottom:12,padding:"8px 14px",borderRadius:6,fontSize:13,
           background:csvStatus.type==="success"?"#f0fdf4":"#fef2f2",
           border:`1px solid ${csvStatus.type==="success"?"#86efac":"#fca5a5"}`,
@@ -500,22 +524,19 @@ function App() {
         </div>
       )}
 
-      {showImport && (
+      {showImport&&(
         <div style={{marginBottom:16,background:"#fff",border:"1px solid #ddd",borderRadius:10,padding:16}}>
           <h4 style={{margin:"0 0 6px",fontSize:14}}>Import Player CSV</h4>
-          <p style={{fontSize:12,color:"#888",margin:"0 0 12px"}}>
-            Expected columns: <code>first name</code>, <code>last name</code>, <code>Position</code> (Forward / Defense / Goalie), <code>Pre Tournament Score</code>, <code>birthday</code> (YYYY-MM-DD), <code>Weight</code>. All manual edits reset on import.
-          </p>
+          <p style={{fontSize:12,color:"#888",margin:"0 0 12px"}}>Handles both <code>first name</code> and <code>fisrt name</code> column spellings. All score edits reset on import.</p>
           <div onDragOver={e=>{e.preventDefault();setDragOver(true);}}
             onDragLeave={()=>setDragOver(false)}
             onDrop={e=>{e.preventDefault();setDragOver(false);handleCSV(e.dataTransfer.files[0]);}}
             onClick={()=>fileRef.current.click()}
             style={{border:`2px dashed ${dragOver?"#2563eb":"#3498db"}`,borderRadius:10,padding:28,
-              textAlign:"center",background:dragOver?"#dbeafe":"#f0f9ff",cursor:"pointer",transition:"background 0.2s"}}>
+              textAlign:"center",background:dragOver?"#dbeafe":"#f0f9ff",cursor:"pointer"}}>
             <input type="file" accept=".csv" ref={fileRef} style={{display:"none"}} onChange={e=>handleCSV(e.target.files[0])}/>
             <div style={{fontSize:28,marginBottom:6}}>📄</div>
             <div style={{fontWeight:600,marginBottom:4}}>Drop your CSV here or click to browse</div>
-            <div style={{fontSize:12,color:"#888"}}>Supports the standard tournament registration export format</div>
           </div>
         </div>
       )}
@@ -530,7 +551,7 @@ function App() {
         ))}
       </div>
 
-      {view==="summary" && (
+      {view==="summary"&&(
         <div style={{overflowX:"auto"}}>
           <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
             <thead><tr style={{background:"#f0f0f0"}}>
@@ -614,7 +635,7 @@ function App() {
         </div>
       )}
 
-      {view==="radar" && (
+      {view==="radar"&&(
         <div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16}}>
             {teams.map((t,i)=>{
@@ -652,7 +673,7 @@ function App() {
         </div>
       )}
 
-      {view==="lookup" && (
+      {view==="lookup"&&(
         <div style={{maxWidth:480}}>
           <div style={{display:"flex",gap:8,marginBottom:16}}>
             <input type="text" placeholder="Enter player name..." value={lookupQuery}
@@ -688,7 +709,7 @@ function App() {
         </div>
       )}
 
-      {view==="roster" && (
+      {view==="roster"&&(
         <>
           <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
             {teams.map((t,i)=>(

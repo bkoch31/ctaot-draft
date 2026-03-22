@@ -252,12 +252,32 @@ function App() {
     setSavedAt(Date.now());
   }, [skaters, goalies, scoreMap, posMap, goalieScoreMap]);
 
-  function exportJSON() {
-    const state = { skaters, goalies, scoreMap, posMap, goalieScoreMap, exportedAt: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  function exportCSV() {
+    const currentTeams = buildTeams(skaters, goalies, scoreMap, posMap, goalieScoreMap);
+    const rows = [["Team","Name","Position","Score","Age","Weight (lbs)","Captain","Unrated"]];
+    currentTeams.forEach((team, i) => {
+      const teamLabel = teamNames[i] || `Team ${i+1}`;
+      [...team.players].sort((a,b) => {
+        const posOrder = {G:0,D:1,F:2};
+        return (posOrder[a.pos]??3) - (posOrder[b.pos]??3);
+      }).forEach(p => {
+        rows.push([
+          teamLabel,
+          p.name,
+          p.pos === "G" ? "Goalie" : p.pos === "F" ? "Forward" : "Defence",
+          p.unrated ? "" : p.score,
+          p.age,
+          p.weight,
+          p.captain ? "Yes" : "",
+          p.unrated ? "Yes" : "",
+        ]);
+      });
+    });
+    const csv = rows.map(r => r.map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "hockey_draft_state.json"; a.click();
+    a.href = url; a.download = "hockey_draft_rosters.csv"; a.click();
     URL.revokeObjectURL(url);
   }
 
@@ -449,7 +469,7 @@ function App() {
             style={{padding:"6px 14px",borderRadius:6,border:"1px solid #e67e22",background:"#fff",color:"#e67e22",cursor:"pointer",fontWeight:600,fontSize:13}}>
             🔀 Re-Draft
           </button>
-          <button onClick={exportJSON}
+          <button onClick={exportCSV}
             style={{padding:"6px 14px",borderRadius:6,border:"1px solid #27ae60",background:"#fff",color:"#27ae60",cursor:"pointer",fontWeight:600,fontSize:13}}>
             💾 Export
           </button>
